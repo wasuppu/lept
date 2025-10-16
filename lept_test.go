@@ -2,6 +2,7 @@ package lept_test
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -265,6 +266,78 @@ func TestParse(t *testing.T) {
 
 	if builder.String() != expected.String() {
 		t.Errorf("got %v want %v", builder.String(), expected.String())
+	}
+}
+
+func TestUnmarshal(t *testing.T) {
+	data := `
+	{
+	    "title": "Design Patterns",
+	    "subtitle": "Elements of Reusable Object-Oriented Software",
+	    "author": [
+	        "Erich Gamma",
+	        "Richard Helm",
+	        "Ralph Johnson",
+	        "John Vlissides"
+	    ],
+	    "year": 2009,
+	    "weight": 1.8,
+	    "hardcover": true,
+	    "publisher": {
+	        "Company": "Pearson Education",
+	        "Country": "India"
+	    },
+	    "website": null
+	}
+	`
+
+	type Book struct {
+		Title     string    `json:"title"`
+		Subtitle  string    `json:"subtitle"`
+		Author    [4]string `json:"author"`
+		Year      int       `json:"year"`
+		Weight    float64   `json:"weight"`
+		Hardcover bool      `json:"hardcover"`
+		Publisher struct {
+			Company string `json:"Company"`
+			Country string `json:"Country"`
+		} `json:"publisher"`
+		Website string `json:"website"`
+	}
+
+	want := Book{
+		Title:    "Design Patterns",
+		Subtitle: "Elements of Reusable Object-Oriented Software",
+		Author: [4]string{
+			"Erich Gamma",
+			"Richard Helm",
+			"Ralph Johnson",
+			"John Vlissides",
+		},
+		Year:      2009,
+		Weight:    1.8,
+		Hardcover: true,
+		Publisher: struct {
+			Company string `json:"Company"`
+			Country string `json:"Country"`
+		}{
+			Company: "Pearson Education",
+			Country: "India",
+		},
+		Website: "",
+	}
+
+	v, err := lept.Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	book := Book{}
+	if err := lept.Unmarshal(v, &book); err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(book, want) {
+		t.Errorf("got %v want %v", book, want)
 	}
 }
 

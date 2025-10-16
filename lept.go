@@ -3,6 +3,7 @@ package lept
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"unicode"
@@ -23,6 +24,13 @@ var errMissSquareBracket = errors.New("miss square bracket")
 var errMissCurlyBracket = errors.New("miss curly bracket")
 var errMissKey = errors.New("miss object key")
 var errMissColon = errors.New("miss colon")
+
+var errMismatchType = errors.New("mismatch type")
+var errUnsupportedType = func(v any) error { return errorf("unsupported bencode type %T", v) }
+
+func errorf(msg string, args ...any) error {
+	return fmt.Errorf(msg, args...)
+}
 
 type Type string
 
@@ -516,4 +524,100 @@ func NewNull() *Value {
 func Parse(data string) (*Value, error) {
 	v := &Value{}
 	return v, v.parse(data)
+}
+
+func Unmarshal(parsed *Value, v any) error {
+	if reflect.TypeOf(v).Kind() != reflect.Ptr {
+		return errorf("Attempt to unmarshal into a non-pointer")
+	}
+
+	return unmarshalValue(parsed, reflect.Indirect(reflect.ValueOf(v)))
+}
+
+func unmarshalValue(parsed *Value, v reflect.Value) (err error) {
+	switch parsed.Type {
+	case TypeTrue, TypeFalse:
+		switch v.Kind() {
+		case reflect.Bool:
+			v.SetBool(parsed.BOOL())
+		case reflect.Interface:
+			v.Set(reflect.ValueOf(parsed.BOOL()))
+		default:
+			err = errMismatchType
+		}
+	case TypeNumber:
+		switch v.Kind() {
+		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
+			v.SetInt(int64(parsed.NUMBER()))
+		case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint:
+			v.SetUint(uint64(parsed.NUMBER()))
+		case reflect.Float64, reflect.Float32:
+			v.SetFloat(parsed.NUMBER())
+		case reflect.Interface:
+			v.Set(reflect.ValueOf(parsed.NUMBER()))
+		default:
+			err = errMismatchType
+		}
+	case TypeString:
+		switch v.Kind() {
+		case reflect.String:
+			if !v.CanSet() {
+				x := ""
+				v = reflect.ValueOf(&x).Elem()
+			}
+			v.SetString(parsed.STRING())
+		case reflect.Interface:
+			v.Set(reflect.ValueOf(parsed.STRING()))
+		default:
+			err = errMismatchType
+		}
+	case TypeArray:
+		switch v.Kind() {
+		case reflect.Slice:
+			l := reflect.MakeSlice(v.Type(), len(parsed.ARRAY()), len(parsed.ARRAY()))
+			for i, e := range parsed.ARRAY() {
+				if err = unmarshalValue(e, reflect.Indirect(l.Index(i))); err != nil {
+					return
+				}
+			}
+			v.Set(l)
+		case reflect.Array:
+			if v.Len() != len(parsed.ARRAY()) {
+				err = fmt.Errorf("array length mismatch: %d vs %d", v.Len(), len(parsed.ARRAY()))
+				return
+			}
+			for i, e := range parsed.ARRAY() {
+				elem := v.Index(i)
+				if err = unmarshalValue(e, elem); err != nil {
+					return
+				}
+			}
+		default:
+			err = errMismatchType
+		}
+	case TypeObject:
+		t := v.Type()
+		for i := range v.NumField() {
+			f := v.Field(i)
+			if !f.CanSet() {
+				continue
+			}
+			key := t.Field(i).Tag.Get("json")
+			if key == "" {
+				continue
+			}
+
+			v := parsed.OBJECT().Get(key)
+			if v == nil {
+				continue
+			}
+			if err = unmarshalValue(v, reflect.Indirect(f)); err != nil {
+				return
+			}
+		}
+	case TypeNull:
+	default:
+		err = errUnsupportedType(parsed)
+	}
+	return
 }
