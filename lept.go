@@ -24,37 +24,37 @@ var errMissCurlyBracket = errors.New("miss curly bracket")
 var errMissKey = errors.New("miss object key")
 var errMissColon = errors.New("miss colon")
 
-type leptType string
+type Type string
 
 const (
-	LEPT_NULL   leptType = "NULL"
-	LEPT_FALSE  leptType = "FALSE"
-	LEPT_TRUE   leptType = "TRUE"
-	LEPT_NUMBER leptType = "NUMBER"
-	LEPT_STRING leptType = "STRING"
-	LEPT_ARRAY  leptType = "ARRAY"
-	LEPT_OBJECT leptType = "OBJECT"
+	TypeNull   Type = "NULL"
+	TypeFalse  Type = "FALSE"
+	TypeTrue   Type = "TRUE"
+	TypeNumber Type = "NUMBER"
+	TypeString Type = "STRING"
+	TypeArray  Type = "ARRAY"
+	TypeObject Type = "OBJECT"
 )
 
-type leptMember struct {
+type Member struct {
 	K string
-	V *leptValue
+	V *Value
 }
 
-func (m leptMember) String() string {
+func (m Member) String() string {
 	return fmt.Sprintf("%q: %v", m.K, m.V)
 }
 
-type leptObject []leptMember
+type Object []Member
 
-func (obj leptObject) Index(i int) *leptMember {
+func (obj Object) Index(i int) *Member {
 	if i > len(obj) {
 		return nil
 	}
 	return &obj[i]
 }
 
-func (obj leptObject) Get(k string) *leptValue {
+func (obj Object) Get(k string) *Value {
 	for i := len(obj) - 1; i >= 0; i-- {
 		if obj[i].K == k {
 			return obj[i].V
@@ -64,7 +64,7 @@ func (obj leptObject) Get(k string) *leptValue {
 	return nil
 }
 
-func (obj leptObject) String() string {
+func (obj Object) String() string {
 	str := "{"
 	i := 0
 	for ; i < len(obj)-1; i++ {
@@ -74,16 +74,16 @@ func (obj leptObject) String() string {
 	return str
 }
 
-type leptArray []*leptValue
+type Array []*Value
 
-func (arr leptArray) Index(i int) *leptValue {
+func (arr Array) Index(i int) *Value {
 	if i > len(arr) {
 		return nil
 	}
 	return arr[i]
 }
 
-func (arr leptArray) String() string {
+func (arr Array) String() string {
 	str := "["
 	i := 0
 	for ; i < len(arr)-1; i++ {
@@ -93,13 +93,13 @@ func (arr leptArray) String() string {
 	return str
 }
 
-type leptContext struct {
+type Context struct {
 	json  string
 	pos   int
 	width int
 }
 
-func (c *leptContext) parseWhitespace() {
+func (c *Context) parseWhitespace() {
 	r := c.next()
 	for unicode.IsSpace(r) {
 		r = c.next()
@@ -107,7 +107,7 @@ func (c *leptContext) parseWhitespace() {
 	c.backup()
 }
 
-func (c *leptContext) next() (r rune) {
+func (c *Context) next() (r rune) {
 	if c.isAtEnd() {
 		c.width = 0
 		return EOF
@@ -117,44 +117,44 @@ func (c *leptContext) next() (r rune) {
 	return r
 }
 
-func (c *leptContext) backup() {
+func (c *Context) backup() {
 	c.pos -= c.width
 }
 
-func (c *leptContext) peek() rune {
+func (c *Context) peek() rune {
 	r := c.next()
 	c.backup()
 	return r
 }
 
-func (c *leptContext) isAtEnd() bool {
+func (c *Context) isAtEnd() bool {
 	return c.pos >= len(c.json)
 }
 
-func newContext(json string) *leptContext {
-	return &leptContext{json, 0, 0}
+func newContext(json string) *Context {
+	return &Context{json, 0, 0}
 }
 
-type leptValue struct {
-	u   any
-	typ leptType
+type Value struct {
+	U    any
+	Type Type
 }
 
-func (v leptValue) String() string {
-	switch v.typ {
-	case LEPT_STRING:
-		return fmt.Sprintf("%q", v.u)
-	case LEPT_OBJECT:
-		return fmt.Sprint(v.u)
+func (v Value) String() string {
+	switch v.Type {
+	case TypeString:
+		return fmt.Sprintf("%q", v.U)
+	case TypeObject:
+		return fmt.Sprint(v.U)
 	default:
-		return fmt.Sprint(v.u)
+		return fmt.Sprint(v.U)
 	}
 }
 
-func (v *leptValue) parse(json string) error {
+func (v *Value) parse(json string) error {
 	c := newContext(json)
 	c.parseWhitespace()
-	v.typ = LEPT_NULL
+	v.Type = TypeNull
 	err := v.parseValue(c)
 	if err == nil {
 		c.parseWhitespace()
@@ -165,15 +165,15 @@ func (v *leptValue) parse(json string) error {
 	return err
 }
 
-func (v *leptValue) parseValue(c *leptContext) error {
+func (v *Value) parseValue(c *Context) error {
 	if !c.isAtEnd() {
 		switch c.peek() {
 		case 'n':
-			return v.parseLiteral(c, "null", LEPT_NULL)
+			return v.parseLiteral(c, "null", TypeNull)
 		case 't':
-			return v.parseLiteral(c, "true", LEPT_TRUE)
+			return v.parseLiteral(c, "true", TypeTrue)
 		case 'f':
-			return v.parseLiteral(c, "false", LEPT_FALSE)
+			return v.parseLiteral(c, "false", TypeFalse)
 		case '"':
 			return v.parseString(c)
 		case '[':
@@ -192,19 +192,19 @@ func (v *leptValue) parseValue(c *leptContext) error {
 	}
 }
 
-func (v *leptValue) parseObject(c *leptContext) error {
-	ms := leptObject{}
+func (v *Value) parseObject(c *Context) error {
+	ms := Object{}
 	c.next()
 	c.parseWhitespace()
 	if c.peek() == '}' {
 		c.next()
-		v.typ = LEPT_OBJECT
-		v.u = ms
+		v.Type = TypeObject
+		v.U = ms
 		return nil
 	}
 
 	for {
-		m := leptMember{}
+		m := Member{}
 
 		if !c.isAtEnd() {
 			if c.peek() != '"' {
@@ -223,7 +223,7 @@ func (v *leptValue) parseObject(c *leptContext) error {
 			c.next()
 
 			c.parseWhitespace()
-			e := &leptValue{}
+			e := &Value{}
 			err = e.parseValue(c)
 			if err != nil {
 				return err
@@ -236,8 +236,8 @@ func (v *leptValue) parseObject(c *leptContext) error {
 				c.parseWhitespace()
 			} else if c.peek() == '}' {
 				c.next()
-				v.typ = LEPT_OBJECT
-				v.u = ms
+				v.Type = TypeObject
+				v.U = ms
 				return nil
 			} else {
 				return errMissComma
@@ -248,19 +248,19 @@ func (v *leptValue) parseObject(c *leptContext) error {
 	}
 }
 
-func (v *leptValue) parseArray(c *leptContext) error {
-	arr := leptArray{}
+func (v *Value) parseArray(c *Context) error {
+	arr := Array{}
 	c.next()
 	c.parseWhitespace()
 	if c.peek() == ']' {
 		c.next()
-		v.typ = LEPT_ARRAY
-		v.u = arr
+		v.Type = TypeArray
+		v.U = arr
 		return nil
 	}
 	for {
 		if !c.isAtEnd() {
-			e := &leptValue{}
+			e := &Value{}
 			err := e.parseValue(c)
 			if err != nil {
 				return err
@@ -272,8 +272,8 @@ func (v *leptValue) parseArray(c *leptContext) error {
 				c.parseWhitespace()
 			} else if c.peek() == ']' {
 				c.next()
-				v.typ = LEPT_ARRAY
-				v.u = arr
+				v.Type = TypeArray
+				v.U = arr
 				return nil
 			} else {
 				return errMissComma
@@ -284,7 +284,7 @@ func (v *leptValue) parseArray(c *leptContext) error {
 	}
 }
 
-func (v *leptValue) parseStringRaw(c *leptContext) (string, error) {
+func (v *Value) parseStringRaw(c *Context) (string, error) {
 	c.next()
 	start := c.pos
 	for c.peek() != '"' {
@@ -300,17 +300,17 @@ func (v *leptValue) parseStringRaw(c *leptContext) (string, error) {
 	return s, nil
 }
 
-func (v *leptValue) parseString(c *leptContext) error {
+func (v *Value) parseString(c *Context) error {
 	s, err := v.parseStringRaw(c)
 	if err != nil {
 		return err
 	}
-	v.u = s
-	v.typ = LEPT_STRING
+	v.U = s
+	v.Type = TypeString
 	return nil
 }
 
-func (v *leptValue) parseNumber(c *leptContext) error {
+func (v *Value) parseNumber(c *Context) error {
 	start := c.pos
 	if c.peek() == '-' {
 		c.next()
@@ -364,12 +364,12 @@ func (v *leptValue) parseNumber(c *leptContext) error {
 		}
 	}
 
-	v.u = n
-	v.typ = LEPT_NUMBER
+	v.U = n
+	v.Type = TypeNumber
 	return nil
 }
 
-func (v *leptValue) parseLiteral(c *leptContext, litetal string, typ leptType) error {
+func (v *Value) parseLiteral(c *Context, litetal string, typ Type) error {
 	if !strings.HasPrefix(c.json[c.pos:], litetal) {
 		return errInvaildValue
 	}
@@ -377,21 +377,21 @@ func (v *leptValue) parseLiteral(c *leptContext, litetal string, typ leptType) e
 	c.pos += len(litetal)
 
 	switch typ {
-	case LEPT_TRUE, LEPT_FALSE:
+	case TypeTrue, TypeFalse:
 		b, _ := strconv.ParseBool(litetal)
-		v.u = b
-	case LEPT_NULL:
-		v.u = "null"
+		v.U = b
+	case TypeNull:
+		v.U = "null"
 	}
 
-	v.typ = typ
+	v.Type = typ
 
 	return nil
 }
 
-func (v *leptValue) Get(k string) *leptValue {
-	if v.typ == LEPT_OBJECT {
-		ms, ok := v.u.(leptObject)
+func (v *Value) Get(k string) *Value {
+	if v.Type == TypeObject {
+		ms, ok := v.U.(Object)
 		if !ok {
 			return nil
 		}
@@ -401,8 +401,8 @@ func (v *leptValue) Get(k string) *leptValue {
 	return nil
 }
 
-func (v *leptValue) Seek(ks ...string) *leptValue {
-	if v.typ == LEPT_OBJECT {
+func (v *Value) Seek(ks ...string) *Value {
+	if v.Type == TypeObject {
 		c := v
 		for _, k := range ks {
 			r := c.Get(k)
@@ -418,102 +418,102 @@ func (v *leptValue) Seek(ks ...string) *leptValue {
 	return nil
 }
 
-func (v *leptValue) Append(e ...*leptValue) *leptValue {
-	if v.typ == LEPT_ARRAY {
-		v.u = append(v.u.(leptArray), e...)
+func (v *Value) Append(e ...*Value) *Value {
+	if v.Type == TypeArray {
+		v.U = append(v.U.(Array), e...)
 		return v
 	}
 
 	return nil
 }
 
-func (v *leptValue) Set(key string, val *leptValue) *leptValue {
-	if v.typ == LEPT_OBJECT {
-		m := leptMember{key, val}
-		v.u = append(v.u.(leptObject), m)
+func (v *Value) Set(key string, val *Value) *Value {
+	if v.Type == TypeObject {
+		m := Member{key, val}
+		v.U = append(v.U.(Object), m)
 		return v
 	}
 
 	return nil
 }
 
-func (v *leptValue) BOOL() bool {
-	if v.typ == LEPT_TRUE || v.typ == LEPT_FALSE {
-		return v.u.(bool)
+func (v *Value) BOOL() bool {
+	if v.Type == TypeTrue || v.Type == TypeFalse {
+		return v.U.(bool)
 	} else {
 		return false
 	}
 }
 
-func (v *leptValue) NULL() string {
-	if v.typ == LEPT_NULL {
+func (v *Value) NULL() string {
+	if v.Type == TypeNull {
 		return "null"
 	} else {
 		return ""
 	}
 }
 
-func (v *leptValue) STRING() string {
-	if v.typ == LEPT_STRING {
-		return v.u.(string)
+func (v *Value) STRING() string {
+	if v.Type == TypeString {
+		return v.U.(string)
 	} else {
 		return ""
 	}
 }
 
-func (v *leptValue) NUMBER() float64 {
-	if v.typ == LEPT_NUMBER {
-		return v.u.(float64)
+func (v *Value) NUMBER() float64 {
+	if v.Type == TypeNumber {
+		return v.U.(float64)
 	} else {
 		return 0
 	}
 }
 
-func (v *leptValue) ARRAY() leptArray {
-	if v.typ == LEPT_ARRAY {
-		return v.u.(leptArray)
+func (v *Value) ARRAY() Array {
+	if v.Type == TypeArray {
+		return v.U.(Array)
 	} else {
-		return leptArray{}
+		return Array{}
 	}
 }
 
-func (v *leptValue) OBJECT() leptObject {
-	if v.typ == LEPT_OBJECT {
-		return v.u.(leptObject)
+func (v *Value) OBJECT() Object {
+	if v.Type == TypeObject {
+		return v.U.(Object)
 	} else {
-		return leptObject{}
+		return Object{}
 	}
 }
 
-func NewBool(b bool) *leptValue {
+func NewBool(b bool) *Value {
 	if b {
-		return &leptValue{b, LEPT_TRUE}
+		return &Value{b, TypeTrue}
 	} else {
-		return &leptValue{b, LEPT_FALSE}
+		return &Value{b, TypeFalse}
 	}
 }
 
-func NewString(s string) *leptValue {
-	return &leptValue{s, LEPT_STRING}
+func NewString(s string) *Value {
+	return &Value{s, TypeString}
 }
 
-func NewNumber(n float64) *leptValue {
-	return &leptValue{n, LEPT_NUMBER}
+func NewNumber(n float64) *Value {
+	return &Value{n, TypeNumber}
 }
 
-func NewArray() *leptValue {
-	return &leptValue{leptArray{}, LEPT_ARRAY}
+func NewArray() *Value {
+	return &Value{Array{}, TypeArray}
 }
 
-func NewObject() *leptValue {
-	return &leptValue{leptObject{}, LEPT_OBJECT}
+func NewObject() *Value {
+	return &Value{Object{}, TypeObject}
 }
 
-func NewNull() *leptValue {
-	return &leptValue{"null", LEPT_NULL}
+func NewNull() *Value {
+	return &Value{"null", TypeNull}
 }
 
-func Parse(data string) (*leptValue, error) {
-	v := &leptValue{}
+func Parse(data string) (*Value, error) {
+	v := &Value{}
 	return v, v.parse(data)
 }
