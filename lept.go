@@ -389,6 +389,130 @@ func (v *leptValue) parseLiteral(c *leptContext, litetal string, typ leptType) e
 	return nil
 }
 
+func (v *leptValue) Get(k string) *leptValue {
+	if v.typ == LEPT_OBJECT {
+		ms, ok := v.u.(leptObject)
+		if !ok {
+			return nil
+		}
+		return ms.Get(k)
+	}
+
+	return nil
+}
+
+func (v *leptValue) Seek(ks ...string) *leptValue {
+	if v.typ == LEPT_OBJECT {
+		c := v
+		for _, k := range ks {
+			r := c.Get(k)
+			if r != nil {
+				c = r
+			} else {
+				return r
+			}
+		}
+		return c
+	}
+
+	return nil
+}
+
+func (v *leptValue) Append(e ...*leptValue) *leptValue {
+	if v.typ == LEPT_ARRAY {
+		v.u = append(v.u.(leptArray), e...)
+		return v
+	}
+
+	return nil
+}
+
+func (v *leptValue) Set(key string, val *leptValue) *leptValue {
+	if v.typ == LEPT_OBJECT {
+		m := leptMember{key, val}
+		v.u = append(v.u.(leptObject), m)
+		return v
+	}
+
+	return nil
+}
+
+func (v *leptValue) BOOL() bool {
+	if v.typ == LEPT_TRUE || v.typ == LEPT_FALSE {
+		return v.u.(bool)
+	} else {
+		return false
+	}
+}
+
+func (v *leptValue) NULL() string {
+	if v.typ == LEPT_NULL {
+		return "null"
+	} else {
+		return ""
+	}
+}
+
+func (v *leptValue) STRING() string {
+	if v.typ == LEPT_STRING {
+		return v.u.(string)
+	} else {
+		return ""
+	}
+}
+
+func (v *leptValue) NUMBER() float64 {
+	if v.typ == LEPT_NUMBER {
+		return v.u.(float64)
+	} else {
+		return 0
+	}
+}
+
+func (v *leptValue) ARRAY() leptArray {
+	if v.typ == LEPT_ARRAY {
+		return v.u.(leptArray)
+	} else {
+		return leptArray{}
+	}
+}
+
+func (v *leptValue) OBJECT() leptObject {
+	if v.typ == LEPT_OBJECT {
+		return v.u.(leptObject)
+	} else {
+		return leptObject{}
+	}
+}
+
+func NewBool(b bool) *leptValue {
+	if b {
+		return &leptValue{b, LEPT_TRUE}
+	} else {
+		return &leptValue{b, LEPT_FALSE}
+	}
+}
+
+func NewString(s string) *leptValue {
+	return &leptValue{s, LEPT_STRING}
+}
+
+func NewNumber(n float64) *leptValue {
+	return &leptValue{n, LEPT_NUMBER}
+}
+
+func NewArray() *leptValue {
+	return &leptValue{leptArray{}, LEPT_ARRAY}
+}
+
+func NewObject() *leptValue {
+	return &leptValue{leptObject{}, LEPT_OBJECT}
+}
+
+func NewNull() *leptValue {
+	return &leptValue{"null", LEPT_NULL}
+}
+
 func Parse(data string) (*leptValue, error) {
 	v := &leptValue{}
 	return v, v.parse(data)
